@@ -290,7 +290,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
               textHeading.setText(Float.toString(location.getBearing()));
               textAccurancy.setText(Float.toString(location.getAccuracy()));
               textLocationProvider.setText(location.getProvider());
-              textLocationTime.setText(timeFormat.format(new Date(location.getTime()*1000)));
+              textLocationTime.setText(timeFormat.format(new Date(location.getTime())));
               textTrackerSize.setText(Integer.toString(info.getTrackSize()));
           }
           textCellOperator.setText(info.getCellOperator());

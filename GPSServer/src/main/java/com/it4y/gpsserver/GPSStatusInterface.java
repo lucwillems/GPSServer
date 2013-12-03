@@ -6,5 +6,5 @@ package com.it4y.gpsserver;
 public interface GPSStatusInterface {
 
     public void onToggleGPS(Boolean state);
-    public void onToggleLock(Boolean state);
+    public void onToggleTrack(Boolean state);
 }

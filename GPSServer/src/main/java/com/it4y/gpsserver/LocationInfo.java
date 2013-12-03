@@ -17,19 +17,16 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Created by luc on 11/30/13.
  */
 public class LocationInfo implements Cloneable {
 
-
-    private String provider="unknown";
-    private double lat = 0;
-    private double lon = 0;
-    private float  speed=0;
-    private float  heading=0;
-    private float  accuracy=0;
+    private Location lastLocation;
+    private static final int MAX_RECORDS=100;
     private long   locationTime=0;
     private String mccmnc;
     private String cellOperator;
@@ -44,21 +41,39 @@ public class LocationInfo implements Cloneable {
     private int GPSTotalSatellites=0;
     private long GPSFirstFixtime=0;
     private boolean GPSFixed=false;
+    private boolean enableTrack=false;
 
+    private ConcurrentLinkedQueue<Location> track=new ConcurrentLinkedQueue<Location>();
     public LocationInfo() {}
 
     public void updateLocation(Location location) {
         if (location != null) {
             locationTime=System.currentTimeMillis()/1000;
-            lat=location.getLatitude();
-            lon = location.getLongitude();
-            speed=location.getSpeed();
-            heading=location.getBearing();
-            accuracy=location.getAccuracy();
-            provider=location.getProvider();
-        } else {
+            //track a copy of original location
+            Location prevLocation=lastLocation;
+            lastLocation=new Location(location);
+            //track it
+            if (enableTrack) {
+                if (prevLocation !=null ) {
+                    float max=Math.max(location.getAccuracy(),prevLocation.getAccuracy());
+                    //if distance > max accuracy than we are moving...
+                    if (location.distanceTo(prevLocation) > max) {
+                        //track if we are moving...
+                        track.add(new Location(lastLocation));
+                        if (track.size()> MAX_RECORDS) {
+                            //remove HEAD from queue
+                            track.poll();
+                        }
+                    }
+                } else {
+                    if (track.size()==0) {
+                        track.add(lastLocation);
+                    }
+                }
+            }
+       } else {
             Log.w(Logger.TAG,"null location :-(");
-        }
+       }
     }
 
     public void updateCellInfo(TelephonyManager tm) {
@@ -135,14 +150,24 @@ public class LocationInfo implements Cloneable {
 
     public JSONObject locationToJSON() throws JSONException {
         JSONObject json=new JSONObject();
-        json.put("version","1.0");
-        json.put("time",locationTime);
-        json.put("provider",provider);
-        json.put("longitude",lon);
-        json.put("latitude",lat);
-        json.put("speed",speed);
-        json.put("accuracy",accuracy);
-        json.put("heading",heading);
+        if (lastLocation != null) {
+            json.put("version","1.0");
+            json.put("time",lastLocation.getTime());
+            json.put("provider",lastLocation.getProvider());
+            json.put("longitude",lastLocation.getLongitude());
+            json.put("latitude",lastLocation.getLatitude());
+            json.put("speed",lastLocation.getSpeed());
+            json.put("accuracy",lastLocation.getAccuracy());
+            json.put("bearing",lastLocation.getBearing());
+        } else {
+            json.put("time",0);
+            json.put("provider","unknown");
+            json.put("longitude",0);
+            json.put("latitude",0);
+            json.put("speed",0);
+            json.put("accuracy",0);
+            json.put("bearing",0);
+        }
         return json;
     }
 
@@ -174,34 +199,34 @@ public class LocationInfo implements Cloneable {
         return json;
     }
 
-
-    public String getProvider() {
-        return provider;
+    public String exportTrackKML() {
+        StringBuilder kmlbuilder=new StringBuilder();
+        //XML header
+        kmlbuilder.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        kmlbuilder.append("<kml xmlns=\"http://www.opengis.net/kml/2.2\">");
+        kmlbuilder.append("<Document>");
+        kmlbuilder.append("<name>GPSServer</name>");
+        kmlbuilder.append("<Folder>");
+        kmlbuilder.append("<name>Track</name>");
+        kmlbuilder.append("<visibility>1</visibility>");
+        kmlbuilder.append("<Placemark>");
+        kmlbuilder.append("<name>last</name>");
+        kmlbuilder.append("<visibility>1</visibility>");
+        kmlbuilder.append("<LineString>");
+        kmlbuilder.append("<tessellate>1</tessellate>");
+        kmlbuilder.append("<coordinates>");
+        for(Location l: track) {
+                kmlbuilder.append(l.getLongitude()).append(",").append(l.getLatitude()).append(",0\n");
+        }
+        kmlbuilder.append("</coordinates>");
+        kmlbuilder.append("</LineString>");
+        kmlbuilder.append("</Placemark>");
+        kmlbuilder.append("</Folder>");
+        kmlbuilder.append("</Document>");
+        kmlbuilder.append("</kml>");
+        return kmlbuilder.toString();
     }
 
-    public double getLat() {
-        return lat;
-    }
-
-    public double getLon() {
-        return lon;
-    }
-
-    public float getSpeed() {
-        return speed;
-    }
-
-    public float getHeading() {
-        return heading;
-    }
-
-    public float getAccuracy() {
-        return accuracy;
-    }
-
-    public long getLocationTime() {
-        return locationTime;
-    }
 
     public String getMccmnc() {
         return mccmnc;
@@ -230,19 +255,34 @@ public class LocationInfo implements Cloneable {
     public long getGPSFirstFixtime() { return GPSFirstFixtime;}
 
     public Location getLocation() {
-        Location l=new Location("info");
-        l.setAccuracy(accuracy);
-        l.setBearing(heading);
-        l.setLatitude(lat);
-        l.setLongitude(lon);
-        l.setSpeed(speed);
-        l.setTime(locationTime);
-        return l;
+        return lastLocation;
     }
 
     public boolean isWifiChanged() { boolean tmp=wifiChanged;wifiChanged=false;return tmp;}
 
     protected Object clone() throws CloneNotSupportedException {
         return super.clone();
+    }
+    public int getTrackSize() {
+        return track.size();
+    }
+
+    public void setTrack(boolean enable) {
+        enableTrack=enable;
+        if (!enable) {
+            //flush all data
+            track.clear();
+        } else {
+            if (lastLocation != null) {
+                track.add(lastLocation);
+            }
+        }
+    }
+
+    public void clearGPS() {
+        GPSFixed=false;
+        GPSTotalSatellites=0;
+        GPSLockedSatellites=0;
+        GPSFirstFixtime=0;
     }
 }

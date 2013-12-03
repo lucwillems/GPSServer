@@ -48,9 +48,9 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     NetworkStateReceiver networkStateReciever=null;
     GpsStatus.Listener gpsListener=null;
 
-    private LocationInfo info=new LocationInfo();
+    protected LocationInfo info=new LocationInfo();
     private boolean useGPS=false;
-    private boolean useLock=false;
+    private boolean useTrack=false;
 
 
     @Override
@@ -68,25 +68,13 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         //prevent sleeping...
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-
         wm = (WifiManager) getSystemService(WIFI_SERVICE);
         cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
 
         //Register ourself as Location Listener for handling location events
         lm = (LocationManager) this.getSystemService(LOCATION_SERVICE);
-        //Cell-ID and WiFi location updates.
-        lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER,  10*1000, 100, this);
-
         //We need this for cell information
         tm =(TelephonyManager) this.getSystemService(TELEPHONY_SERVICE);
-
-        //We listen to network state changes so we can keep track of our ip and server
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
-        filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
-        networkStateReciever=new NetworkStateReceiver(this);
-        registerReceiver(networkStateReciever, filter);
-
     }
 
     @Override
@@ -99,21 +87,25 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
 
     @Override
     public void onStart() {
-        Log.i(Logger.TAG,"onStart()");
+        Log.i(Logger.TAG, "onStart()");
         super.onStart();
         EasyTracker.getInstance(this).activityStart(this);  // Add this method.
+        initEventHandling();
+    }
+
+    @Override
+    public void onRestart() {
+        Log.i(Logger.TAG, "onRestart()");
+        super.onRestart();
+        EasyTracker.getInstance(this).activityStart(this);  // Add this method.
+        initEventHandling();
     }
 
     public void onStop() {
         super.onStop();
         EasyTracker.getInstance(this).activityStop(this);  // Add this method.
-    }
-    @Override
-    public void onRestart() {
-        Log.i(Logger.TAG, "onRestart()");
-        super.onRestart();
-        //get current last know location
-        forceUpdateLocation();
+        //where not active anymore so lets stop draining battery
+        lm.removeUpdates(this);
     }
 
     @Override
@@ -124,17 +116,15 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
 
     @Override
     protected void onResume() {
-        Log.i(Logger.TAG,"onResume()");
+        Log.i(Logger.TAG, "onResume()");
         super.onResume();
-        updateLocationManager();
     }
 
     @Override
     public void onDestroy()
     {
-        Log.i(Logger.TAG,"onDestroy()");
-        lm.removeUpdates(this);
-        unregisterReceiver(networkStateReciever);
+        Log.i(Logger.TAG, "onDestroy()");
+        removeEventHandling();
         stopServer();
         super.onDestroy();
     }
@@ -189,6 +179,12 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         boolean isFromSameProvider = isSameProvider(location.getProvider(),
                 currentBestLocation.getProvider());
 
+        //case we get CELL and it is less accuracy then last gps
+        if (location.getProvider().equalsIgnoreCase("network") &&
+            currentBestLocation.getProvider().equalsIgnoreCase("gps") &&
+            location.getAccuracy() < currentBestLocation.distanceTo(location))
+            return false;
+
         // Determine location quality using a combination of timeliness and accuracy
         if (isMoreAccurate) {
             return true;
@@ -212,13 +208,15 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     public void onLocationChanged(Location location) {
         if (location != null) {
             Log.i(Logger.TAG, "Location onLocationChanged "+location.getProvider());
-            if ( isBetterLocation(location,info.getLocation())) {
-                refreshLocation(location);
-            } else {
-               Log.i(Logger.TAG,"Skipping location("+location.toString()+"), less good");
+            synchronized (info) {
+              if ( isBetterLocation(location,info.getLocation())) {
+                   refreshLocation(location);
+              } else {
+                 Log.i(Logger.TAG,"Skipping location("+location.toString()+"), less good");
+              }
             }
         } else {
-            Log.w(Logger.TAG,"NULL location :-(");
+            Log.w(Logger.TAG, "NULL location :-(");
         }
     }
 
@@ -232,11 +230,13 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             location=lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         }
         //refresh all how need to know
-        if (location != null) {
-            if (isBetterLocation(location,info.getLocation())) {
-                refreshLocation(location);
-            } else {
-                Log.i(Logger.TAG,"Skipping location("+location.toString()+"), less good");
+        synchronized (info) {
+            if (location != null) {
+                if (isBetterLocation(location,info.getLocation())) {
+                    refreshLocation(location);
+                } else {
+                    Log.i(Logger.TAG,"Skipping location("+location.toString()+"), less good");
+                }
             }
         }
     }
@@ -248,20 +248,13 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             Log.w(Logger.TAG,"ignoring NULL location :-(");
             return;
         }
-        //update internal information
-        info.updateLocation(location);
-        info.updateCellInfo(tm);
-        //update my server if active
-        updateServerLocation();
+        synchronized (info) {
+            //update internal information
+            info.updateLocation(location);
+            info.updateCellInfo(tm);
+        }
         //update screen
         updateScreen();
-    }
-
-    private void updateServerLocation() {
-        //update my server if active
-        if (server != null) {
-            server.updateLocation(info);
-        }
     }
 
     private void updateScreen() {
@@ -275,6 +268,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         TextView textAccurancy = (TextView)findViewById(R.id.accurancy);
         TextView textLocationTime=(TextView)findViewById(R.id.locationTime);
         TextView textLocationProvider=(TextView)findViewById(R.id.locationProvider);
+        TextView textTrackerSize=(TextView)findViewById(R.id.trackSize);
         TextView textCellOperator=(TextView)findViewById(R.id.cellOperator);
         TextView textCellMCCMNC=(TextView)findViewById(R.id.cellMCCMNC);
         TextView textCelllac=(TextView)findViewById(R.id.cellLac);
@@ -285,26 +279,34 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         TextView textGPSSatellite=(TextView)findViewById(R.id.satellites);
         TextView textVersion=(TextView)findViewById(R.id.apkversion);
 
-
-        textLatitude.setText(Double.toString(info.getLat()));
-        textLongitude.setText(Double.toString(info.getLon()));
-        textspeed.setText(Float.toString(info.getSpeed()));
-        textHeading.setText(Float.toString(info.getHeading()));
-        textAccurancy.setText(Float.toString(info.getAccuracy()));
-        textLocationProvider.setText(info.getProvider());
-        textLocationTime.setText(timeFormat.format(new Date(info.getLocationTime()*1000)));
-        textCellOperator.setText(info.getCellOperator());
-        textCellMCCMNC.setText(info.getMccmnc());
-        textCelllac.setText(Integer.toString(info.getLac()));
-        textCellcid.setText(Integer.toString(info.getCid()));
-        if (info.getWifiState()) {
+        //lock info RO
+        //i know this is lazy.bad,etc...
+        synchronized (info) {
+          if (info.getLocation() != null ) {
+              Location location=info.getLocation();
+              textLatitude.setText(Double.toString(location.getLatitude()));
+              textLongitude.setText(Double.toString(location.getLongitude()));
+              textspeed.setText(Float.toString(location.getSpeed()));
+              textHeading.setText(Float.toString(location.getBearing()));
+              textAccurancy.setText(Float.toString(location.getAccuracy()));
+              textLocationProvider.setText(location.getProvider());
+              textLocationTime.setText(timeFormat.format(new Date(location.getTime()*1000)));
+              textTrackerSize.setText(Integer.toString(info.getTrackSize()));
+          }
+          textCellOperator.setText(info.getCellOperator());
+          textCellMCCMNC.setText(info.getMccmnc());
+          textCelllac.setText(Integer.toString(info.getLac()));
+          textCellcid.setText(Integer.toString(info.getCid()));
+          if (info.getWifiState()) {
             textIP.setText("http://"+info.getIP()+":"+GPSHTTPServer.serverPort);
-        } else {
+          } else {
             textIP.setText("no IP/Wifi active");
+          }
+          textGPSLocked.setText(Boolean.toString(info.getGPSLocked()));
+          textGPSLockTime.setText(Long.toString(info.getGPSFirstFixtime()));
+          textGPSSatellite.setText(Long.toString(info.getGPSLockedSatellites())+"/"+Long.toString(info.getGPSTotalSatellites()));
         }
-        textGPSLocked.setText(Boolean.toString(info.getGPSLocked()));
-        textGPSLockTime.setText(Long.toString(info.getGPSFirstFixtime()));
-        textGPSSatellite.setText(Long.toString(info.getGPSLockedSatellites())+"/"+Long.toString(info.getGPSTotalSatellites()));
+
         //app version
         try {
         PackageInfo manager=getPackageManager().getPackageInfo(getPackageName(), 0);
@@ -330,27 +332,30 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
 
     public void onWifiConnected() {
         Log.i(Logger.TAG,"Wifi connected");
-        info.updateWifi(cm, wm);
+        synchronized (info) {
+           info.updateWifi(cm, wm);
+        }
         startServer();
         updateScreen();
-        updateServerLocation();
         Toast.makeText(getBaseContext(), " Wifi on ", Toast.LENGTH_LONG).show();
     }
 
     public void onWifiDisconnected() {
         Log.i(Logger.TAG,"Wifi disconnect");
-        info.updateWifi(cm, wm);
+        synchronized (info) {
+            info.updateWifi(cm, wm);
+        }
         stopServer();
         Toast.makeText(getBaseContext(), " Wifi off", Toast.LENGTH_LONG).show();
         updateScreen();
-        updateServerLocation();
     }
 
     public void onNetworkChange() {
-        forceUpdateLocation();
+        Log.i(Logger.TAG,"onNetworkChange");
     }
 
-    public void updateLocationManager() {
+    public void initLocationEventHandling() {
+        //Location update events
         lm.removeUpdates(this);
         if (gpsListener != null) {
             lm.removeGpsStatusListener(gpsListener);
@@ -364,8 +369,9 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
                 @Override
                 public void onGpsStatusChanged(int event) {
                     Log.i(Logger.TAG, "onGpsStatusChanged: " + event);
-                    info.updateGPS(event, lm);
-                    updateServerLocation();
+                    synchronized (info) {
+                        info.updateGPS(event, lm);
+                    }
                     updateScreen();
                 }
             };
@@ -377,6 +383,36 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             Log.i(Logger.TAG,"using network for location");
             lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 10, this);
         }
+
+    }
+
+    public void initNetworkEventHandling() {
+        Log.i(Logger.TAG,"initNetworkEventHandling");
+        //Network changes notifications
+        if (networkStateReciever==null) {
+            //We listen to network state changes so we can keep track of our ip and server
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+            filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+            networkStateReciever=new NetworkStateReceiver(this);
+            registerReceiver(networkStateReciever, filter);
+        } else {
+            Log.i(Logger.TAG,"NetworkStateReciever still active ?");
+        }
+    }
+
+    public void initEventHandling() {
+        Log.i(Logger.TAG,"initEventHandling");
+        initLocationEventHandling();
+        initNetworkEventHandling();
+    }
+
+    public void removeEventHandling() {
+        Log.i(Logger.TAG,"removeEventHandling");
+        //remove network notifications updates
+        unregisterReceiver(networkStateReciever);
+        //remove location updates
+        lm.removeUpdates(this);
     }
 
 
@@ -385,22 +421,29 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
       //when state changes
       Log.i(Logger.TAG, "onToggleGPS " + state);
       useGPS=state;
-      updateLocationManager();
+      if (useGPS) {
+          synchronized (info) {
+              info.clearGPS();
+          }
+      }
+      //refresh eventHandling for location only
+      initLocationEventHandling();
     }
 
     @Override
-    public void onToggleLock(Boolean state) {
-        //TODO
-
+    public void onToggleTrack(Boolean state) {
+        synchronized (info) {
+            info.setTrack(state);
+        }
+        updateScreen();
     }
 
     public void startServer() {
         //startup HTTP server
         if (server == null) {
-            server=new GPSHTTPServer();
+            server=new GPSHTTPServer(info);
             try {
                 server.start();
-                server.updateLocation(info);
             } catch (IOException e) {
                 Log.e(Logger.TAG,"HTTP error",e);
             }
@@ -461,17 +504,15 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
                 }
             });
 
-/*
-            //Lock switch listener
-            Switch useLockButton = (Switch) getView().findViewById(R.id.lockSwitch);
-            useLockButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            //Track switch listener
+            Switch useTrackButton = (Switch) getView().findViewById(R.id.trackSwitch);
+            useTrackButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 
                 @Override
                 public void onCheckedChanged(CompoundButton buttonView,boolean isChecked) {
-  //                  ((GpsServerActivity)getActivity()).onToggleLock(isChecked);
+                    ((GpsServerActivity)getActivity()).onToggleTrack(isChecked);
                 }
             });
-*/
 
         }
 

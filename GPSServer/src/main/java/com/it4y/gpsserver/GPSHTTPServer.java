@@ -14,17 +14,31 @@ import java.util.Map;
 public class GPSHTTPServer  extends NanoHTTPD {
     private LocationInfo info;
     protected static final int serverPort=8080;
-    public GPSHTTPServer() {
+
+    public GPSHTTPServer(LocationInfo info) {
         super(serverPort);
         Log.i(Logger.TAG,"HTTP server started on port "+serverPort);
+        this.info=info;
+    }
+
+    private Response createResponse(String s,String mimeType,String filename) {
+        Response response=new Response(s);
+        response.setMimeType(mimeType);
+        response.addHeader("Content-Disposition", "attachment;filename=" + filename );
+        response.addHeader("Connection", "close");
+        return response;
+    }
+
+    private Response createResponse(String s,String mimeType) {
+        Response response=new Response(s);
+        response.setMimeType(mimeType);
+        return response;
     }
 
     private Response createResponse(String s) {
-        Response response=new Response(s);
-        response.setMimeType("application/json");
-        //response.addHeader("Connection","close");
-        return response;
+        return createResponse(s,"application/json");
     }
+
     @Override
     public Response serve(String uri, Method method, Map<String, String> header, Map<String, String> parms, Map<String, String> files) {
         Log.i(Logger.TAG,"HTTP request "+method+" "+uri);
@@ -43,49 +57,54 @@ public class GPSHTTPServer  extends NanoHTTPD {
         else if (uri.equalsIgnoreCase("/all")) {
             return createResponse(getAllData());
         }
+        else if (uri.equalsIgnoreCase("/track")) {
+            return createResponse(getTrackData(),"application/vnd.google-earth.kml+xml","track.kml");
+        }
         return createResponse(getError("invalid URI: "+uri));
     }
 
     private String getLocationData() {
-      if (info != null) {
+      synchronized (info) {
         try {
             return info.locationToJSON().toString();
         } catch (JSONException e) {
           return getError("JSONException: "+e.toString());
         }
       }
-      return getError("no data");
     }
 
     private String getCellData() {
-        if (info != null) {
+        synchronized (info) {
             try {
                 return info.cellToJSON().toString();
             } catch (JSONException e) {
                 return getError("JSONException: "+e.toString());
             }
         }
-        return getError("no data");
     }
     private String getGPSData() {
-        if (info != null) {
+        synchronized (info) {
             try {
                 return info.GPStoJSON().toString();
             } catch (JSONException e) {
                 return getError("JSONException: "+e.toString());
             }
         }
-        return getError("no data");
     }
     private String getAllData() {
-        if (info != null) {
+        synchronized (info) {
             try {
                 return info.toJSON().toString();
             } catch (JSONException e) {
                 return getError("JSONException: "+e.toString());
             }
         }
-        return getError("no data");
+    }
+
+    private String getTrackData() {
+        synchronized (info) {
+                return info.exportTrackKML();
+        }
     }
 
     private String getDeviceData() {
@@ -101,6 +120,7 @@ public class GPSHTTPServer  extends NanoHTTPD {
             return getError("JSONException: "+e.toString());
         }
     }
+
     public String getError(String message) {
         try {
           JSONObject json=new JSONObject();
@@ -113,13 +133,4 @@ public class GPSHTTPServer  extends NanoHTTPD {
       return "{}";
     }
 
-    public void updateLocation(LocationInfo info) {
-        try {
-            Log.i(Logger.TAG,"HTTP location update");
-            this.info=(LocationInfo)info.clone();
-        } catch (CloneNotSupportedException e) {
-            Log.e("HTTP","ooeps",e);
-            //ignore
-        }
-    }
 }

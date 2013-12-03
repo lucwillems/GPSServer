@@ -1,0 +1,50 @@
+import static java.lang.System.*
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:0.6.+'
+    }
+}
+apply plugin: 'android'
+
+repositories {
+    mavenCentral()
+}
+
+android {
+    compileSdkVersion 19
+    buildToolsVersion '19.0.0'
+
+    signingConfigs {
+        debug {
+            storeFile file("/home/luc/.android/debug.keystore")
+        }
+
+        release {
+            storeFile file(getenv("ANDROID_KEYSTORE_PASSWORD"))
+            storePassword getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias getenv("ANDROID_KEY_ALIAS")
+            keyPassword getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 16
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            zipAlign true
+            debuggable false
+        }
+    }
+}
+
+    dependencies {
+        compile files('libs/GoogleAnalyticsServicesAndroid_3.01/libGoogleAnalyticsServices.jar')
+}

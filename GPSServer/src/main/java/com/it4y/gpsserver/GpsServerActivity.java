@@ -358,8 +358,8 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         }
         if (useGPS) {
             Log.i(Logger.TAG,"using GPS+network for location");
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, this);
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,0,0, this);
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 10, this);
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,10,10, this);
             gpsListener=new GpsStatus.Listener() {
                 @Override
                 public void onGpsStatusChanged(int event) {
@@ -375,7 +375,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             //don't use GPS anymore
             lm.removeUpdates(this);
             Log.i(Logger.TAG,"using network for location");
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, this);
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 10, this);
         }
     }
 

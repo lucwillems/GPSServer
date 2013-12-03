@@ -24,7 +24,7 @@ android {
         }
 
         release {
-            storeFile file(getenv("ANDROID_KEYSTORE_PASSWORD"))
+            storeFile file(getenv("ANDROID_KEYSTORE_FILE"))
             storePassword getenv("ANDROID_KEYSTORE_PASSWORD")
             keyAlias getenv("ANDROID_KEY_ALIAS")
             keyPassword getenv("ANDROID_KEY_PASSWORD")

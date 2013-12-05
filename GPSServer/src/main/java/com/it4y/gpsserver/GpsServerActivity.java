@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.location.GpsStatus;
@@ -30,6 +31,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.analytics.tracking.android.EasyTracker;
+import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -90,7 +92,6 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         Log.i(Logger.TAG, "onStart()");
         super.onStart();
         EasyTracker.getInstance(this).activityStart(this);  // Add this method.
-        initEventHandling();
     }
 
     @Override
@@ -98,7 +99,6 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         Log.i(Logger.TAG, "onRestart()");
         super.onRestart();
         EasyTracker.getInstance(this).activityStart(this);  // Add this method.
-        initEventHandling();
     }
 
     public void onStop() {
@@ -111,6 +111,13 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     @Override
     public void onPause() {
         Log.i(Logger.TAG, "onPause()");
+        SharedPreferences mPrefs=getSharedPreferences(getApplicationInfo().name, Context.MODE_PRIVATE);
+        SharedPreferences.Editor ed=mPrefs.edit();
+        Log.i(Logger.TAG,"store "+info.getTrackSize()+" records track data");
+        ed.putString("trackData",info.trackToJSON());
+        ed.commit();
+        removeEventHandling();
+        stopServer();
         super.onPause();
     }
 
@@ -118,14 +125,19 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     protected void onResume() {
         Log.i(Logger.TAG, "onResume()");
         super.onResume();
+        SharedPreferences mPrefs=getSharedPreferences(getApplicationInfo().name, Context.MODE_PRIVATE);
+        String track=mPrefs.getString("trackData",null);
+        if (track != null) {
+            info.trackFromJSON(track);
+            Log.i(Logger.TAG,"loaded "+info.getTrackSize()+" records track data");
+        }
+        initEventHandling();
     }
 
     @Override
     public void onDestroy()
     {
         Log.i(Logger.TAG, "onDestroy()");
-        removeEventHandling();
-        stopServer();
         super.onDestroy();
     }
 

@@ -1,5 +1,6 @@
 package com.it4y.gpsserver;
 
+import android.content.SharedPreferences;
 import android.location.GpsSatellite;
 import android.location.GpsStatus;
 import android.location.Location;
@@ -16,9 +17,15 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Created by luc on 11/30/13.
@@ -285,4 +292,18 @@ public class LocationInfo implements Cloneable {
         GPSLockedSatellites=0;
         GPSFirstFixtime=0;
     }
+
+    public String trackToJSON() {
+        Gson gson = new Gson();
+        Type listType = TypeToken.get(track.getClass()).getType();
+        return gson.toJson(track);
+    }
+
+    public void trackFromJSON(String JSON) {
+        Gson gson = new Gson();
+        ConcurrentLinkedQueue<Location> x= new ConcurrentLinkedQueue<Location>();
+        Type listType = TypeToken.get(x.getClass()).getType();
+        track.addAll((new Gson()).<Collection<Location>>fromJson(JSON, listType));
+    }
+
 }

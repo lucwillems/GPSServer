@@ -220,13 +220,15 @@ public class LocationInfo implements Cloneable {
         kmlbuilder.append("<name>last</name>");
         kmlbuilder.append("<visibility>1</visibility>");
         kmlbuilder.append("<LineString>");
-        kmlbuilder.append("<tessellate>1</tessellate>");
+        kmlbuilder.append("<extrude>1</extrude>");
+        kmlbuilder.append("<altitudeMode>absolute</altitudeMode>");
         kmlbuilder.append("<coordinates>");
         for(Location l: track) {
-                kmlbuilder.append(l.getLongitude()).append(",").append(l.getLatitude()).append(",0\n");
+                kmlbuilder.append(l.getLongitude()).append(",").append(l.getLatitude()).append(l.getSpeed()).append("\n");
         }
         kmlbuilder.append("</coordinates>");
         kmlbuilder.append("</LineString>");
+        kmlbuilder.append("<Style><LineStyle><color>#ff0000ff</color><width>2</width></LineStyle></Style>");
         kmlbuilder.append("</Placemark>");
         kmlbuilder.append("</Folder>");
         kmlbuilder.append("</Document>");

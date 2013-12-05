@@ -303,7 +303,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
               textAccurancy.setText(Float.toString(location.getAccuracy()));
               textLocationProvider.setText(location.getProvider());
               textLocationTime.setText(timeFormat.format(new Date(location.getTime())));
-              textTrackerSize.setText(Integer.toString(info.getTrackSize()));
+              textTrackerSize.setText(info.getTrackSize()+"/"+info.MAX_RECORDS);
           }
           textCellOperator.setText(info.getCellOperator());
           textCellMCCMNC.setText(info.getMccmnc());
@@ -375,8 +375,8 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
         }
         if (useGPS) {
             Log.i(Logger.TAG,"using GPS+network for location");
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 10, this);
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,10,10, this);
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 60, this);
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,100,60, this);
             gpsListener=new GpsStatus.Listener() {
                 @Override
                 public void onGpsStatusChanged(int event) {
@@ -393,7 +393,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             //don't use GPS anymore
             lm.removeUpdates(this);
             Log.i(Logger.TAG,"using network for location");
-            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 10, this);
+            lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 120, 60, this);
         }
 
     }

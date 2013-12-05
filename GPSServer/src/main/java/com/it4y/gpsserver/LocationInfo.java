@@ -25,6 +25,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
 import com.google.gson.reflect.TypeToken;
 
 /**
@@ -33,7 +41,7 @@ import com.google.gson.reflect.TypeToken;
 public class LocationInfo implements Cloneable {
 
     private Location lastLocation;
-    private static final int MAX_RECORDS=100;
+    protected static final int MAX_RECORDS=1000;
     private long   locationTime=0;
     private String mccmnc;
     private String cellOperator;
@@ -50,7 +58,7 @@ public class LocationInfo implements Cloneable {
     private boolean GPSFixed=false;
     private boolean enableTrack=false;
 
-    private ConcurrentLinkedQueue<Location> track=new ConcurrentLinkedQueue<Location>();
+    private ArrayList<Location> track=new ArrayList<Location>();
     public LocationInfo() {}
 
     public void updateLocation(Location location) {
@@ -64,12 +72,13 @@ public class LocationInfo implements Cloneable {
                 if (prevLocation !=null ) {
                     float max=Math.max(location.getAccuracy(),prevLocation.getAccuracy());
                     //if distance > max accuracy than we are moving...
-                    if (location.distanceTo(prevLocation) > max) {
+                    if (location.distanceTo(prevLocation) > max &&
+                        location.getTime()-prevLocation.getTime() > 60) {
                         //track if we are moving...
                         track.add(new Location(lastLocation));
-                        if (track.size()> MAX_RECORDS) {
+                        while (track.size()> MAX_RECORDS) {
                             //remove HEAD from queue
-                            track.poll();
+                            track.remove(0);
                         }
                     }
                 } else {
@@ -221,10 +230,15 @@ public class LocationInfo implements Cloneable {
         kmlbuilder.append("<visibility>1</visibility>");
         kmlbuilder.append("<LineString>");
         kmlbuilder.append("<extrude>1</extrude>");
-        kmlbuilder.append("<altitudeMode>absolute</altitudeMode>");
+        kmlbuilder.append("<altitudeMode>relativeToGround</altitudeMode>");
         kmlbuilder.append("<coordinates>");
         for(Location l: track) {
-                kmlbuilder.append(l.getLongitude()).append(",").append(l.getLatitude()).append(l.getSpeed()).append("\n");
+                kmlbuilder.append(l.getLongitude())
+                          .append(",")
+                          .append(l.getLatitude())
+                          .append(",")
+                          .append(l.getSpeed())
+                          .append("\n");
         }
         kmlbuilder.append("</coordinates>");
         kmlbuilder.append("</LineString>");
@@ -296,16 +310,64 @@ public class LocationInfo implements Cloneable {
     }
 
     public String trackToJSON() {
-        Gson gson = new Gson();
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.registerTypeAdapter(Location.class, new LocationSerializer());
+        gsonBuilder.registerTypeAdapter(Location.class, new LocationDeserializer());
+        Gson gson = gsonBuilder.create();
         Type listType = TypeToken.get(track.getClass()).getType();
         return gson.toJson(track);
     }
 
     public void trackFromJSON(String JSON) {
-        Gson gson = new Gson();
-        ConcurrentLinkedQueue<Location> x= new ConcurrentLinkedQueue<Location>();
-        Type listType = TypeToken.get(x.getClass()).getType();
-        track.addAll((new Gson()).<Collection<Location>>fromJson(JSON, listType));
+        try {
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.registerTypeAdapter(Location.class, new LocationSerializer());
+            gsonBuilder.registerTypeAdapter(Location.class, new LocationDeserializer());
+            Gson gson = gsonBuilder.create();
+            Type collectionType = new TypeToken<ArrayList<Location>>(){}.getType();
+            ArrayList<Location> x = gson.fromJson(JSON, collectionType);
+            for (Object l : x) {
+               if (l instanceof Location) {
+                    track.add(new Location((Location)l));
+               }
+            }
+        } catch (RuntimeException e) {
+            Log.e(Logger.TAG,"ERROR",e);
+        }
     }
 
+    class LocationSerializer implements JsonSerializer<Location>
+    {
+        public JsonElement serialize(Location t, Type type,JsonSerializationContext jsc) {
+            JsonObject jo = new JsonObject();
+            jo.addProperty("mProvider", t.getProvider());
+            jo.addProperty("mLongitude",t.getLongitude());
+            jo.addProperty("mLatitude",t.getLatitude());
+            jo.addProperty("mAccuracy", t.getAccuracy());
+            jo.addProperty("mSpeed",t.getSpeed());
+            jo.addProperty("mBearing",t.getBearing());
+            jo.addProperty("mAltitude",t.getAltitude());
+            jo.addProperty("mTime",t.getTime());
+            return jo;
+        }
+
+    }
+
+    class LocationDeserializer implements JsonDeserializer<Location> {
+        public Location deserialize(JsonElement je, Type type, JsonDeserializationContext jdc)  throws JsonParseException
+        {
+            JsonObject jo = je.getAsJsonObject();
+            Location l = new Location(jo.getAsJsonPrimitive("mProvider").getAsString());
+            l.setLongitude(jo.getAsJsonPrimitive("mLongitude").getAsDouble());
+            l.setLatitude(jo.getAsJsonPrimitive("mLatitude").getAsDouble());
+            l.setAccuracy(jo.getAsJsonPrimitive("mAccuracy").getAsFloat());
+            l.setSpeed(jo.getAsJsonPrimitive("mSpeed").getAsFloat());
+            l.setBearing(jo.getAsJsonPrimitive("mBearing").getAsFloat());
+            l.setAltitude(jo.getAsJsonPrimitive("mAltitude").getAsFloat());
+            l.setTime(jo.getAsJsonPrimitive("mTime").getAsLong());
+            //l.setElapsedRealtimeNanos(jo.getAsJsonObject("mElapsedRealtimeNanos").getAsLong());
+            l.setExtras(null);
+            return l;
+        }
+    }
 }

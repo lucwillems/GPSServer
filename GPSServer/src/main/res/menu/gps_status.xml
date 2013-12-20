@@ -3,7 +3,41 @@
     tools:context=".GpsStatus" >
     
     <item android:id="@+id/action_update"
-        android:title="@string/action_update"
+        android:title="Update now"
         android:orderInCategory="100"
         android:showAsAction="never" />
+    <item android:id="@+id/location_submenu"
+        android:title="Location providers"
+        android:orderInCategory="100"
+        android:showAsAction="never" >
+        <menu>
+            <group android:id="@+id/Location_option">
+                <group android:checkableBehavior="all">
+                    <item android:id="@+id/GPS"
+                        android:title="GPS" />
+                    <item android:id="@+id/network"
+                        android:title="Network" />
+                    <item android:id="@+id/simulate"
+                        android:title="Simulate" />
+                </group>
+            </group>
+        </menu>
+    </item>
+    <item android:id="@+id/track_submenu"
+        android:title="Track speed"
+        android:orderInCategory="100"
+        android:showAsAction="never" >
+        <menu>
+            <group android:id="@+id/track_option">
+                <group android:checkableBehavior="single">
+                    <item android:id="@+id/track_human"
+                        android:title="Human" />
+                    <item android:id="@+id/network"
+                        android:title="Car" />
+                    <item android:id="@+id/simulate"
+                        android:title="Train" />
+                </group>
+            </group>
+        </menu>
+    </item>
 </menu>

@@ -155,7 +155,7 @@ public class LocationInfo implements Cloneable {
                     }
                 }
             }
-            Log.i(Logger.TAG, "GPS satellite " + GPSFixed + " " + GPSFirstFixtime + " " + GPSLockedSatellites + " " + GPSTotalSatellites);
+            Log.d(Logger.TAG, "GPS satellite " + GPSFixed + " " + GPSFirstFixtime + " " + GPSLockedSatellites + " " + GPSTotalSatellites);
         } else {
             GPSFirstFixtime=0;
             GPSTotalSatellites=0;

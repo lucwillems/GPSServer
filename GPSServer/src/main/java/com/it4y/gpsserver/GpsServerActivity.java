@@ -143,7 +143,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        Log.i(Logger.TAG,"onOptionsItemSelected"+this.getClass().getSimpleName());
+        Log.d(Logger.TAG,"onOptionsItemSelected"+this.getClass().getSimpleName());
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
@@ -219,7 +219,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     @Override
     public void onLocationChanged(Location location) {
         if (location != null) {
-            Log.i(Logger.TAG, "Location onLocationChanged "+location.getProvider());
+            Log.d(Logger.TAG, "Location onLocationChanged "+location.getProvider());
             synchronized (info) {
               if ( isBetterLocation(location,info.getLocation())) {
                    refreshLocation(location);
@@ -235,10 +235,10 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     private void forceUpdateLocation() {
         Location location;
         if (useGPS) {
-            Log.i(Logger.TAG,"forceUpdateLocation(GPS)");
+            Log.d(Logger.TAG,"forceUpdateLocation(GPS)");
             location=lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
         } else {
-            Log.i(Logger.TAG,"forceUpdateLocation(NETWORK)");
+            Log.d(Logger.TAG,"forceUpdateLocation(NETWORK)");
             location=lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
         }
         //refresh all how need to know
@@ -255,7 +255,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
 
     public void refreshLocation(Location location) {
 
-        Log.i(Logger.TAG, "refresh location");
+        Log.d(Logger.TAG, "refresh location");
         if (location == null) {
             Log.w(Logger.TAG,"ignoring NULL location :-(");
             return;
@@ -270,7 +270,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     }
 
     private void updateScreen() {
-        Log.i(Logger.TAG,"update screen");
+        Log.d(Logger.TAG,"update screen");
         TextView textLatitude = (TextView)findViewById(R.id.latitude);
         if (textLatitude == null)
             return;
@@ -363,7 +363,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     }
 
     public void onNetworkChange() {
-        Log.i(Logger.TAG,"onNetworkChange");
+        Log.d(Logger.TAG,"onNetworkChange");
     }
 
     public void initLocationEventHandling() {
@@ -380,7 +380,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             gpsListener=new GpsStatus.Listener() {
                 @Override
                 public void onGpsStatusChanged(int event) {
-                    Log.i(Logger.TAG, "onGpsStatusChanged: " + event);
+                    Log.d(Logger.TAG, "onGpsStatusChanged: " + event);
                     synchronized (info) {
                         info.updateGPS(event, lm);
                     }
@@ -399,7 +399,7 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
     }
 
     public void initNetworkEventHandling() {
-        Log.i(Logger.TAG,"initNetworkEventHandling");
+        Log.d(Logger.TAG,"initNetworkEventHandling");
         //Network changes notifications
         if (networkStateReciever==null) {
             //We listen to network state changes so we can keep track of our ip and server
@@ -409,22 +409,34 @@ public class GpsServerActivity extends Activity implements LocationListener,GPSS
             networkStateReciever=new NetworkStateReceiver(this);
             registerReceiver(networkStateReciever, filter);
         } else {
-            Log.i(Logger.TAG,"NetworkStateReciever still active ?");
+            Log.d(Logger.TAG,"NetworkStateReciever still active ?");
         }
     }
 
     public void initEventHandling() {
-        Log.i(Logger.TAG,"initEventHandling");
+        Log.d(Logger.TAG,"initEventHandling");
         initLocationEventHandling();
         initNetworkEventHandling();
     }
 
     public void removeEventHandling() {
-        Log.i(Logger.TAG,"removeEventHandling");
+        Log.d(Logger.TAG,"removeEventHandling");
         //remove network notifications updates
-        unregisterReceiver(networkStateReciever);
-        //remove location updates
-        lm.removeUpdates(this);
+        if (networkStateReciever != null) {
+            try {
+            unregisterReceiver(networkStateReciever);
+            } catch(RuntimeException ignore) {
+                Log.d(Logger.TAG,"oeps, should not happen",ignore);
+            } finally {
+                networkStateReciever=null;
+            }
+        }
+        try {
+            //remove location updates
+            lm.removeUpdates(this);
+        } catch (RuntimeException ignore) {
+            Log.d(Logger.TAG,"oeps, should not happen",ignore);
+        }
     }
 
 
